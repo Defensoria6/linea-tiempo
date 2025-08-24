@@ -13,6 +13,9 @@
             --accent: #3498db;
             --muted: #7f8c8d;
             --shadow: 0 4px 15px rgba(0, 0, 0, .08);
+            --danger: #e74c3c;
+            --warning: #f39c12;
+            --success: #27ae60;
         }
 
         body {
@@ -64,6 +67,9 @@
             border-radius: 8px;
             box-shadow: 0 2px 5px rgba(0, 0, 0, 0.05);
             transition: transform 0.2s, box-shadow 0.2s;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-start;
         }
 
         .timeline-event:hover {
@@ -84,6 +90,10 @@
             z-index: 1;
         }
 
+        .timeline-content {
+            flex-grow: 1;
+        }
+
         .timeline-date {
             font-size: 0.9rem;
             color: var(--muted);
@@ -102,39 +112,78 @@
             font-style: italic;
         }
 
-        .btn-back {
-            background: var(--primary);
-            color: white;
-            padding: 10px 20px;
+        .btn-back, .btn-print, .btn-edit, .btn-delete {
             border: none;
+            padding: 8px 12px;
             border-radius: 8px;
             cursor: pointer;
-            font-size: 1rem;
+            font-size: 0.9rem;
             display: inline-flex;
             align-items: center;
             gap: 8px;
-            margin-top: 20px;
             text-decoration: none;
             transition: opacity 0.2s;
+        }
+
+        .btn-back {
+            background: var(--primary);
+            color: white;
+            margin-top: 20px;
         }
         
         .btn-back:hover {
             opacity: 0.9;
         }
+
+        .btn-print {
+            background: var(--success);
+            color: white;
+        }
+        
+        .btn-edit {
+            background: var(--warning);
+            color: white;
+        }
+        
+        .btn-delete {
+            background: var(--danger);
+            color: white;
+        }
+
+        .event-actions {
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            white-space: nowrap;
+        }
+
+        .top-actions {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            gap: 10px;
+            flex-wrap: wrap;
+        }
     </style>
 </head>
 <body>
     <div class="timeline-container">
-        <div class="timeline-header">
-            <h1>Línea de Tiempo de la Causa</h1>
-            <h2 id="causa-id">Cargando...</h2>
+        <div class="top-actions">
+            <a href="https://defensoria6.github.io/registro-causas/" class="btn-back">
+                <i class="fa fa-arrow-left"></i> Volver al Registro
+            </a>
+            <button id="btnPrint" class="btn-print"><i class="fa fa-print"></i> Imprimir Línea de Tiempo</button>
         </div>
+
+        <div class="timeline-header">
+            <h1>Línea de Tiempo</h1>
+            <h2 id="causa-header">Cargando...</h2>
+        </div>
+        
         <div class="timeline" id="timeline-body">
             <div class="timeline-loading">Cargando eventos...</div>
         </div>
-        <a href="https://defensoria6.github.io/registro-causas/" class="btn-back">
-            <i class="fa fa-arrow-left"></i> Volver al Registro
-        </a>
+        
     </div>
 
     <script src="https://www.gstatic.com/firebasejs/10.12.2/firebase-app-compat.js"></script>
@@ -143,15 +192,15 @@
     <script>
         // Configuración de Firebase (debe ser la misma que en tu index(1).html)
         const firebaseConfig = {
-    apiKey: "AIzaSyBt6X0u0BpiNPcV2SNPrN-spCmjl2AhZaA",
-    authDomain: "causas-defensoria.firebaseapp.com",
-    projectId: "causas-defensoria",
-    storageBucket: "causas-defensoria.appspot.com", // ✅ corregido
-    messagingSenderId: "186064671470",
-    appId: "1:186064671470:web:b58bae5eadbe6e469f19ff"
-};
-firebase.initializeApp(firebaseConfig);
-const db = firebase.firestore();;
+            apiKey: "AIzaSyBt6X0u0BpiNPcV2SNPrN-spCmjl2AhZaA",
+            authDomain: "causas-defensoria.firebaseapp.com",
+            projectId: "causas-defensoria",
+            storageBucket: "causas-defensoria.appspot.com",
+            messagingSenderId: "186064671470",
+            appId: "1:186064671470:web:b58bae5eadbe6e469f19ff"
+        };
+        firebase.initializeApp(firebaseConfig);
+        const db = firebase.firestore();
 
         const $ = (id) => document.getElementById(id);
         const fmtShort = (d) => { 
@@ -169,10 +218,23 @@ const db = firebase.firestore();;
         const params = new URLSearchParams(window.location.search);
         const causaId = params.get('id');
 
+        const timelineBody = $('timeline-body');
+        const causaHeader = $('causa-header');
+        
         if (causaId) {
-            $('causa-id').textContent = 'ID de Causa: ' + causaId;
-            const timelineBody = $('timeline-body');
-            
+            // Obtener el número y carátula de la causa
+            db.collection("causas").doc(causaId).get().then(doc => {
+                if (doc.exists) {
+                    const causa = doc.data();
+                    causaHeader.textContent = `N°: ${causa.numCausa} - Carátula: ${causa.caratula}`;
+                } else {
+                    causaHeader.textContent = 'Causa no encontrada.';
+                }
+            }).catch(error => {
+                console.error("Error al obtener la causa:", error);
+                causaHeader.textContent = 'Error al cargar los datos de la causa.';
+            });
+
             // Suscribirse a la bitácora en tiempo real
             db.collection("causas").doc(causaId).collection("seguimiento").orderBy("fecha", "asc").onSnapshot(snapshot => {
                 timelineBody.innerHTML = '';
@@ -189,8 +251,14 @@ const db = firebase.firestore();;
 
                     timelineBody.insertAdjacentHTML('beforeend', `
                         <div class="timeline-event">
-                            <span class="timeline-date">${fecha}</span>
-                            <div class="timeline-text"><b>${usuario}:</b> ${texto}</div>
+                            <div class="timeline-content">
+                                <span class="timeline-date">${fecha}</span>
+                                <div class="timeline-text"><b>${usuario}:</b> ${texto}</div>
+                            </div>
+                            <div class="event-actions">
+                                <button class="btn-edit" onclick="editarNota('${doc.id}')" title="Editar nota"><i class="fa fa-pen"></i></button>
+                                <button class="btn-delete" onclick="eliminarNota('${doc.id}')" title="Eliminar nota"><i class="fa fa-trash"></i></button>
+                            </div>
                         </div>
                     `);
                 });
@@ -200,9 +268,42 @@ const db = firebase.firestore();;
             });
 
         } else {
-            $('causa-id').textContent = 'Error: Causa no especificada';
-            $('timeline-body').innerHTML = '<div class="timeline-loading">Por favor, selecciona una causa desde la página principal.</div>';
+            causaHeader.textContent = 'Error: Causa no especificada';
+            timelineBody.innerHTML = '<div class="timeline-loading">Por favor, selecciona una causa desde la página principal.</div>';
         }
+
+        // Funciones de gestión
+        async function editarNota(notaId) {
+            const nuevoTexto = prompt("Ingrese el nuevo texto de la nota:");
+            if (nuevoTexto !== null && nuevoTexto.trim() !== "") {
+                try {
+                    await db.collection("causas").doc(causaId).collection("seguimiento").doc(notaId).update({ texto: nuevoTexto });
+                    alert("Nota editada con éxito.");
+                } catch (e) {
+                    console.error("Error al editar la nota:", e);
+                    alert("No se pudo editar la nota.");
+                }
+            }
+        }
+        
+        async function eliminarNota(notaId) {
+            if (confirm("¿Está seguro de que desea eliminar esta nota?")) {
+                try {
+                    await db.collection("causas").doc(causaId).collection("seguimiento").doc(notaId).delete();
+                    alert("Nota eliminada con éxito.");
+                } catch (e) {
+                    console.error("Error al eliminar la nota:", e);
+                    alert("No se pudo eliminar la nota.");
+                }
+            }
+        }
+
+        function imprimirTimeline() {
+            window.print();
+        }
+
+        $('btnPrint').onclick = imprimirTimeline;
+
     </script>
 </body>
 </html>
